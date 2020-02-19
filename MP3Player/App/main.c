@@ -47,6 +47,8 @@ void main() {
 INT8U err;
     Hw_init();
     //I2C1_init();
+    //int count = 0;
+    //while(count++ < 10000000);
     
     RETAILMSG(1, ("MP3 Player Demo: Built %s %s.\r\n\r\n",
         __DATE__,

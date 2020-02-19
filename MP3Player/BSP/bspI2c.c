@@ -26,10 +26,13 @@ void I2C1_init(void){
 	// enable APB1 peripheral clock for I2C1
 	// <your code here>
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+    //RCC->APB1ENR |= RCC_APB1ENR_I2C1EN;
     
 	// enable clock for SCL and SDA pins
 	// <your code here>
     RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOB, ENABLE);
+    //RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
+    
 	
 	/* setup SCL and SDA pins
 	 * You can connect the I2C1 functions to two different

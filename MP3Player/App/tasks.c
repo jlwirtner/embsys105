@@ -104,7 +104,7 @@ void StartupTask(void* pdata)
     PrintWithBuf(buf, BUFSIZE, "StartupTask: Creating the application tasks\n");
 
     // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
-    OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
+    //OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
     OSTaskCreate(LcdTouchDemoTask, (void*)0, &LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST2_PRIO);
 
     // Delete ourselves, letting the work be done in the new tasks.

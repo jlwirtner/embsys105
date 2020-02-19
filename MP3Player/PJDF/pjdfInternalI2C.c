@@ -64,7 +64,7 @@ static PjdfErrCode ReadI2C(DriverInternal *pDriver, void* pBuffer, INT32U* pCoun
     }
     pData[i] = I2C_read_nack(pContext->i2cMemMap);
     
-    I2C_stop(pContext->i2cMemMap);
+    //I2C_stop(pContext->i2cMemMap);
     return PJDF_ERR_NONE;
 }
 
