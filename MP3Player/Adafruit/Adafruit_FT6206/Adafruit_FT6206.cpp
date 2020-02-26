@@ -17,7 +17,6 @@
 
 #include <Adafruit_FT6206.h>
 #include "bspI2c.h"
-#include "pjdf.h"
 
 #if defined(__SAM3X8E__)
     #define Wire Wire1
@@ -34,6 +33,15 @@ void delay(uint32_t);
 Adafruit_FT6206::Adafruit_FT6206() {
 }
 
+/**************************************************************************/
+/*! 
+    @brief  Sets PJDF handle for I2C1
+*/
+/**************************************************************************/
+// I2C, no address adjustments or pins
+void Adafruit_FT6206::setPjdfHandle(HANDLE hI2c1) {
+  this->hI2c1 = hI2c1;
+}
 
 /**************************************************************************/
 /*! 
@@ -102,26 +110,23 @@ boolean Adafruit_FT6206::touched(void) {
 /*****************************/
 
 void Adafruit_FT6206::readData(uint16_t *x, uint16_t *y) {
-
-  uint8_t i2cdat[16];
-  //uint32_t numBytes;
-  //HANDLE hI2c = Open("/dev/i2c1", NULL);
-  //i2cdat[0] = FT6206_ADDR<<1;
-  //i2cdat[1] = 0;
-  //numBytes = 1;
-  //Write(hI2c, (void*)i2cdat, &numBytes);
-  I2C_start(I2C1, FT6206_ADDR<<1, I2C_Direction_Transmitter);
-  I2C_write(I2C1, (uint8_t)0);  
-  I2C_stop(I2C1);
-  I2C_start(I2C1, FT6206_ADDR<<1, I2C_Direction_Receiver);
-  ////Wire.requestFrom((uint8_t)FT6206_ADDR, (uint8_t)32);
   
-  uint8_t i;
-  for (i=0; i<15; i++)
-    i2cdat[i] = I2C_read_ack(I2C1);
-  i2cdat[i] = I2C_read_nack(I2C1);
-  //numBytes = 16;
-  //Read(hI2c, (void*)i2cdat, &numBytes);
+  INT32U cpu_sr;
+  
+  uint8_t i2cdat[16];
+  uint32_t numBytes;
+  
+  i2cdat[0] = FT6206_ADDR<<1;
+  i2cdat[1] = 0;
+  numBytes = 1;
+  
+  OS_ENTER_CRITICAL();
+  Write(hI2c1, (void*)i2cdat, &numBytes);
+  
+
+  numBytes = 16;
+  Read(hI2c1, (void*)i2cdat, &numBytes);
+  OS_EXIT_CRITICAL();
 
   /*
   for (int16_t i=0; i<0x20; i++) {
@@ -186,19 +191,22 @@ TS_Point Adafruit_FT6206::getPoint(void) {
 
 
 uint8_t Adafruit_FT6206::readRegister8(uint8_t reg) {
-  uint8_t x ;
-   // use i2c
-    I2C_start(I2C1, FT6206_ADDR<<1, I2C_Direction_Transmitter); 
-    I2C_write(I2C1, (uint8_t)reg);
-    I2C_stop(I2C1);
-    I2C_start(I2C1, FT6206_ADDR<<1, I2C_Direction_Receiver);
-    // Wire.requestFrom((uint8_t)FT6206_ADDR, (uint8_t)1);
-    x = I2C_read_nack(I2C1);
+    INT8U  buffer[] = {FT6206_ADDR<<1, reg};
+    INT8U * pBuffer = &buffer[0];
+    INT32U numBytes = 1;
+    INT32U cpu_sr;
+    OS_ENTER_CRITICAL();
+    
 
-  //  Serial.print("$"); Serial.print(reg, HEX); 
-  //  Serial.print(": 0x"); Serial.println(x, HEX);
-  
-  return x;
+    Write(hI2c1, (void*)pBuffer, &numBytes);
+    
+
+    Read(hI2c1, (void*)pBuffer, &numBytes);
+    
+    OS_ENTER_CRITICAL();
+
+
+    return buffer[0];
 }
 
 void Adafruit_FT6206::writeRegister8(uint8_t reg, uint8_t val) {

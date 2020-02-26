@@ -2508,6 +2508,9 @@
             <name>$PROJ_DIR$\PJDF\pjdf.h</name>
         </file>
         <file>
+            <name>$PROJ_DIR$\PJDF\pjdfCtrlI2C.h</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\PJDF\pjdfCtrlLcdILI9341.h</name>
         </file>
         <file>

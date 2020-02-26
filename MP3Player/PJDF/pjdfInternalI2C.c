@@ -51,7 +51,7 @@ static PjdfErrCode ReadI2C(DriverInternal *pDriver, void* pBuffer, INT32U* pCoun
 {
 	PjdfContextI2c *pContext = (PjdfContextI2c*) pDriver->deviceContext;
     if (pContext == NULL) while(1);
-    //SPI_GetBuffer(pContext->spiMemMap, (INT8U*) pBuffer, *pCount);
+    
     INT8U * pData;
     pData = (INT8U *)pBuffer;
     
@@ -64,7 +64,6 @@ static PjdfErrCode ReadI2C(DriverInternal *pDriver, void* pBuffer, INT32U* pCoun
     }
     pData[i] = I2C_read_nack(pContext->i2cMemMap);
     
-    //I2C_stop(pContext->i2cMemMap);
     return PJDF_ERR_NONE;
 }
 
@@ -82,7 +81,6 @@ static PjdfErrCode WriteI2C(DriverInternal *pDriver, void* pBuffer, INT32U* pCou
 {
 	PjdfContextI2c *pContext = (PjdfContextI2c*) pDriver->deviceContext;
     if (pContext == NULL) while(1);
-    //SPI_SendBuffer(pContext->spiMemMap, (INT8U*) pBuffer, *pCount);
     
     INT8U * pData;
     pData = (INT8U *)pBuffer;
@@ -134,8 +132,7 @@ PjdfErrCode InitI2C(DriverInternal *pDriver, char *pName)
     {
         pDriver->maxRefCount = 1; // Maximum refcount allowed for the device
         pDriver->deviceContext = (void*) &i2c1Context;
-        //BspI2C1_init(); // init I2C1 hardware
-        I2C1_init();
+        I2C1_init(); // init I2C1 hardware
     }
   
     // Assign implemented functions to the interface pointers

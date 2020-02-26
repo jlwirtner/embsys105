@@ -104,7 +104,7 @@ void StartupTask(void* pdata)
     PrintWithBuf(buf, BUFSIZE, "StartupTask: Creating the application tasks\n");
 
     // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
-    //OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
+    OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
     OSTaskCreate(LcdTouchDemoTask, (void*)0, &LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST2_PRIO);
 
     // Delete ourselves, letting the work be done in the new tasks.
@@ -160,6 +160,10 @@ void LcdTouchDemoTask(void* pdata)
 
     DrawLcdContents();
     
+    HANDLE hI2c1 = Open(PJDF_DEVICE_ID_I2C1, NULL);
+    if (!PJDF_IS_VALID_HANDLE(hI2c1)) while(1);
+    touchCtrl.setPjdfHandle(hI2c1);
+    
     PrintWithBuf(buf, BUFSIZE, "Initializing FT6206 touchscreen controller\n");
     if (! touchCtrl.begin(40)) {  // pass in 'sensitivity' coefficient
         PrintWithBuf(buf, BUFSIZE, "Couldn't start FT6206 touchscreen controller\n");
@@ -175,7 +179,6 @@ void LcdTouchDemoTask(void* pdata)
         // <Your code here>
         // <hint: Call a function provided by touchCtrl
         touched = touchCtrl.touched();
-        
         if (! touched) {
             OSTimeDly(5);
             continue;
