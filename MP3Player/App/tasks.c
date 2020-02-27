@@ -27,6 +27,11 @@ Adafruit_ILI9341 lcdCtrl = Adafruit_ILI9341(); // The LCD controller
 
 Adafruit_FT6206 touchCtrl = Adafruit_FT6206(); // The touch controller
 
+//BUTTONS
+
+Adafruit_GFX_Button playButton = Adafruit_GFX_Button();
+Adafruit_GFX_Button stopButton = Adafruit_GFX_Button();
+
 #define PENRADIUS 3
 
 long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_max)
@@ -48,11 +53,13 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 
 static OS_STK   LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static OS_STK   CommandTaskStk[APP_CFG_TASK_START_STK_SIZE];
 
      
 // Task prototypes
 void LcdTouchDemoTask(void* pdata);
 void Mp3DemoTask(void* pdata);
+void CommandTask(void* pdata);
 
 
 
@@ -61,6 +68,21 @@ void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
 
 // Globals
 BOOLEAN nextSong = OS_FALSE;
+
+// Message queue nonsense
+
+#define QUEUE_SIZE 4
+
+typedef enum {
+  play,
+  stop
+} commands;
+
+OS_EVENT * commandMsgQ;
+
+void* commandMsg[QUEUE_SIZE];
+
+commands commandMem[QUEUE_SIZE];
 
 /************************************************************************************
 
@@ -102,10 +124,13 @@ void StartupTask(void* pdata)
 
     // Create the test tasks
     PrintWithBuf(buf, BUFSIZE, "StartupTask: Creating the application tasks\n");
+    
+    commandMsgQ = OSQCreate(&commandMsg[0], QUEUE_SIZE);
 
     // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
-    OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
+    //OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
     OSTaskCreate(LcdTouchDemoTask, (void*)0, &LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST2_PRIO);
+    OSTaskCreate(CommandTask, (void*)0, &CommandTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 3);
 
     // Delete ourselves, letting the work be done in the new tasks.
     PrintWithBuf(buf, BUFSIZE, "StartupTask: deleting self\n");
@@ -114,6 +139,9 @@ void StartupTask(void* pdata)
 
 static void DrawLcdContents()
 {
+    lcdCtrl.setRotation(180);
+    playButton.initButton(&lcdCtrl, 100, 200, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_RED, "yo", 2);
+    
 	char buf[BUFSIZE];
     lcdCtrl.fillScreen(ILI9341_BLACK);
     
@@ -122,8 +150,62 @@ static void DrawLcdContents()
     lcdCtrl.setTextColor(ILI9341_WHITE);  
     lcdCtrl.setTextSize(2);
     PrintToLcdWithBuf(buf, BUFSIZE, "Hello World!");
+    playButton.drawButton();
 
 }
+
+void CommandTask(void* pdata)
+{
+    char buf[BUFSIZE];
+	PrintWithBuf(buf, BUFSIZE, "CommandTask: starting\n");
+    
+    INT8U err;
+    commands* pCurrentCommand;
+    while(1) {
+        pCurrentCommand = (commands*)OSQPend(commandMsgQ, 0, &err);
+        PrintWithBuf(buf, BUFSIZE, "CommandTask: received command!\n");
+        switch(*pCurrentCommand) {
+        case play:
+            PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed play!\n");
+        case stop:
+            PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed stop!\n");
+        }
+    }
+}
+
+void UpdateDisplayTask(void* pdata)
+{
+    PjdfErrCode pjdfErr;
+    INT32U length;
+
+	char buf[BUFSIZE];
+	PrintWithBuf(buf, BUFSIZE, "UpdateDisplayTask: starting\n");
+
+	PrintWithBuf(buf, BUFSIZE, "Opening LCD driver: %s\n", PJDF_DEVICE_ID_LCD_ILI9341);
+    // Open handle to the LCD driver
+    HANDLE hLcd = Open(PJDF_DEVICE_ID_LCD_ILI9341, 0);
+    if (!PJDF_IS_VALID_HANDLE(hLcd)) while(1);
+
+	PrintWithBuf(buf, BUFSIZE, "Opening LCD SPI driver: %s\n", LCD_SPI_DEVICE_ID);
+    // We talk to the LCD controller over a SPI interface therefore
+    // open an instance of that SPI driver and pass the handle to 
+    // the LCD driver.
+    HANDLE hSPI = Open(LCD_SPI_DEVICE_ID, 0);
+    if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
+
+    length = sizeof(HANDLE);
+    pjdfErr = Ioctl(hLcd, PJDF_CTRL_LCD_SET_SPI_HANDLE, &hSPI, &length);
+    if(PJDF_IS_ERROR(pjdfErr)) while(1);
+
+	PrintWithBuf(buf, BUFSIZE, "Initializing LCD controller\n");
+    lcdCtrl.setPjdfHandle(hLcd);
+    lcdCtrl.begin();
+
+    DrawLcdContents();
+    
+}
+
+
 
 /************************************************************************************
 
@@ -171,6 +253,9 @@ void LcdTouchDemoTask(void* pdata)
     }
     
     int currentcolor = ILI9341_RED;
+    
+    commands currentCommand;
+    INT8U err;
 
     while (1) { 
         boolean touched = false;
@@ -180,6 +265,7 @@ void LcdTouchDemoTask(void* pdata)
         // <hint: Call a function provided by touchCtrl
         touched = touchCtrl.touched();
         if (! touched) {
+            playButton.press(false);
             OSTimeDly(5);
             continue;
         }
@@ -193,6 +279,19 @@ void LcdTouchDemoTask(void* pdata)
         if (rawPoint.x == 0 && rawPoint.y == 0)
         {
             continue; // usually spurious, so ignore
+        }
+        
+        if (playButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !playButton.isPressed()){
+            playButton.press(true);
+            currentCommand = play;
+            err = OSQPost(commandMsgQ, (void*)&currentCommand);
+            if (err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "error!\n");
+            } else {
+                OSTimeDly(5);
+            }
+            OSTimeDly(50);
+            continue; // only draw inside of playbutton
         }
         
         // transform touch orientation to screen orientation.

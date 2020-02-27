@@ -28,6 +28,8 @@ static OS_STK StartupStk[APP_CFG_TASK_START_STK_SIZE];
 // Allocate the print buffer
 PRINT_DEFINEBUFFER();
 
+
+
 /************************************************************************************
 
 Routine Description:
@@ -78,6 +80,8 @@ INT8U err;
     }
 
     DEBUGMSG(1, ("Starting multi-tasking.\n"));
+    
+    
 
     // start the OS
     OSStart();
