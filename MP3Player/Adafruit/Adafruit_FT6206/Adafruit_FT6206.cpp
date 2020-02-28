@@ -203,7 +203,7 @@ uint8_t Adafruit_FT6206::readRegister8(uint8_t reg) {
 
     Read(hI2c1, (void*)pBuffer, &numBytes);
     
-    OS_ENTER_CRITICAL();
+    OS_EXIT_CRITICAL();
 
 
     return buffer[0];

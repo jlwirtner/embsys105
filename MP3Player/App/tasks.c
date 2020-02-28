@@ -167,8 +167,10 @@ void CommandTask(void* pdata)
         switch(*pCurrentCommand) {
         case play:
             PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed play!\n");
+            break;
         case stop:
             PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed stop!\n");
+            break;
         }
     }
 }
@@ -290,9 +292,10 @@ void LcdTouchDemoTask(void* pdata)
             } else {
                 OSTimeDly(5);
             }
-            OSTimeDly(50);
             continue; // only draw inside of playbutton
         }
+        
+        if (playButton.isPressed()) continue;
         
         // transform touch orientation to screen orientation.
         TS_Point p = TS_Point();
