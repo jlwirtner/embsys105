@@ -31,6 +31,8 @@ Adafruit_FT6206 touchCtrl = Adafruit_FT6206(); // The touch controller
 
 Adafruit_GFX_Button playButton = Adafruit_GFX_Button();
 Adafruit_GFX_Button stopButton = Adafruit_GFX_Button();
+Adafruit_GFX_Button nextButton = Adafruit_GFX_Button();
+Adafruit_GFX_Button prevButton = Adafruit_GFX_Button();
 
 #define PENRADIUS 3
 
@@ -40,7 +42,8 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 }
 
 
-#include "train_crossing.h"
+//#include "train_crossing.h"
+#include "songs.h"
 
 #define BUFSIZE 256
 
@@ -72,7 +75,7 @@ void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
 
 
 // Globals
-BOOLEAN nextSong = OS_FALSE;
+//BOOLEAN nextSong = OS_FALSE;
 
 // Message queue nonsense
 
@@ -80,7 +83,9 @@ BOOLEAN nextSong = OS_FALSE;
 
 typedef enum {
   play,
-  stop
+  stop,
+  next,
+  prev
 } commands;
 
 OS_EVENT * commandMsgQ;
@@ -94,6 +99,8 @@ commands commandMem[QUEUE_SIZE];
 typedef enum {
   init,
   pause,
+  nextSong,
+  prevSong,
   startPlayback,
   playback,
   stopPlayback
@@ -102,7 +109,9 @@ typedef enum {
 typedef enum {
   startDisplay,
   playDisplay,
-  pauseDisplay
+  pauseDisplay,
+//  nextSongTitle,
+//  prevSongTitle
 } displayState;
 
 OS_EVENT * mp3MBox;
@@ -110,6 +119,8 @@ OS_EVENT * displayMBox;
 
 void updateMp3PlayerState(mp3PlayerState* state, commands currentCommand);
 void notifyDisplayIfNeeded(mp3PlayerState* state, commands currentCommand);
+
+INT8U currentSongIndex = 0;
 
 /************************************************************************************
 
@@ -158,7 +169,7 @@ void StartupTask(void* pdata)
 
     // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
     //OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
-    OSTaskCreate(TouchTask, (void*)0, &TouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST2_PRIO);
+    OSTaskCreate(TouchTask, (void*)0, &TouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 6);
     OSTaskCreate(DisplayTask, (void*)0, &DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 8);
     OSTaskCreate(CommandTask, (void*)0, &CommandTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 3);
     OSTaskCreate(Mp3Task, (void*)0, &Mp3TaskStk[APP_CFG_TASK_START_STK_SIZE-1], 5);
@@ -190,6 +201,34 @@ void CommandTask(void* pdata)
             break;
         case stop:
             PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed stop!\n");
+            err = OSMboxPost(mp3MBox, (void*)pCurrentCommand);
+            if(err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "CommandTask: error posting to mp3 mailbox - %d!\n", err);
+            }
+            break;
+        case next:
+            PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed next!\n");
+            *pCurrentCommand = stop;
+            err = OSMboxPost(mp3MBox, (void*)pCurrentCommand);
+            if(err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "CommandTask: error posting to mp3 mailbox - %d!\n", err);
+            }
+            OSTimeDly(5);
+            *pCurrentCommand = next;
+            err = OSMboxPost(mp3MBox, (void*)pCurrentCommand);
+            if(err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "CommandTask: error posting to mp3 mailbox - %d!\n", err);
+            }
+            break;
+        case prev:
+            PrintWithBuf(buf, BUFSIZE, "CommandTask: Pressed next!\n");
+            *pCurrentCommand = stop;
+            err = OSMboxPost(mp3MBox, (void*)pCurrentCommand);
+            if(err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "CommandTask: error posting to mp3 mailbox - %d!\n", err);
+            }
+            OSTimeDly(5);
+            *pCurrentCommand = prev;
             err = OSMboxPost(mp3MBox, (void*)pCurrentCommand);
             if(err != 0) {
                 PrintWithBuf(buf, BUFSIZE, "CommandTask: error posting to mp3 mailbox - %d!\n", err);
@@ -235,16 +274,23 @@ void Mp3Task(void* pdata)
     mp3PlayerState state = init;
     displayState newDisplayState = startDisplay;
 
-    INT32U bufLen = sizeof(Train_Crossing);
+    //INT32U bufLen = sizeof(Train_Crossing);
+    INT32U bufLen;
     
     // mp3 stream variables
-    INT8U *bufPos = (INT8U*)Train_Crossing;
+    //INT8U *bufPos = (INT8U*)Train_Crossing;
+    INT8U *bufPos;
     INT32U iBufPos = 0;
     INT32U chunkLen;
     
     chunkLen = MP3_DECODER_BUF_SIZE;
     
     BOOLEAN notifyPause = false;
+    
+    // Set current song to track 0
+    //int currentSongIndex = 0;
+    bool playNextSong = false;
+    
     
     while(1) {
         pCurrentCommand = (commands*)OSMboxAccept(mp3MBox);
@@ -267,10 +313,33 @@ void Mp3Task(void* pdata)
             }
             OSTimeDly(50);
             break;
+        case nextSong:
+            if (currentSongIndex == NUM_SONGS-1) {
+                currentSongIndex = 0;
+            } else {
+                ++currentSongIndex;
+            }
+//            newDisplayState = nextSongTitle;
+//            OSMboxPost(displayMBox, (void*)&newDisplayState);
+//            OSTimeDly(50);
+            state = startPlayback;
+            break;
+        case prevSong:
+            if (currentSongIndex == 0) {
+                currentSongIndex = NUM_SONGS -1;
+            } else {
+                --currentSongIndex;
+            }
+//            newDisplayState = prevSongTitle;
+//            OSMboxPost(displayMBox, (void*)&newDisplayState);
+//            OSTimeDly(50);
+            state = startPlayback;
+            break;
         case startPlayback:
             chunkLen = MP3_DECODER_BUF_SIZE;
             iBufPos = 0;
-            bufPos = (INT8U*)Train_Crossing;
+            bufPos = (INT8U*)songData[currentSongIndex];
+            bufLen = songSizes[currentSongIndex];
             // Place MP3 driver in command mode (subsequent writes will be sent to the decoder's command interface)
             Ioctl(hMp3, PJDF_CTRL_MP3_SELECT_COMMAND, 0, 0);
             
@@ -294,20 +363,25 @@ void Mp3Task(void* pdata)
             
             notifyPause = true;
             state = playback;
+            playNextSong = false;
             break;
         case playback:
-//            OSTimeDly(500);
-//            PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
-//            Mp3Stream(hMp3, (INT8U*)&Train_Crossing[playbackMarker], chunkSize);
-//            playbackMarker += chunkSize;
-//            if (playbackMarker >= end) {
-//                PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-//                state = init;
-//            }
             // detect last chunk of pBuf
             if (bufLen - iBufPos < MP3_DECODER_BUF_SIZE)
             {
                 chunkLen = bufLen - iBufPos;
+                if (currentSongIndex == NUM_SONGS-1) {
+                  currentSongIndex = 0;
+                } else {
+                  ++currentSongIndex;
+                }
+//                newDisplayState = nextSongTitle;
+//                OSMboxPost(displayMBox, (void*)&newDisplayState);
+//                OSTimeDly(50);
+                if (currentSongIndex != 0) 
+                    playNextSong = true;
+                else
+                    playNextSong = false;
                 state = stopPlayback;
             }
                     
@@ -324,7 +398,12 @@ void Mp3Task(void* pdata)
             newDisplayState = startDisplay;
             OSMboxPost(displayMBox, (void*)&newDisplayState);
             notifyPause = false;
-            state = init;
+            if (playNextSong) {
+                state = startPlayback;
+                OSTimeDly(250);
+            } else {
+                state = init;
+            }
             break;
         }
     }
@@ -349,6 +428,16 @@ void updateMp3PlayerState(mp3PlayerState* state, commands currentCommand)
   
   if(*state == pause && currentCommand == play) {
     *state = playback;
+    return;
+  }
+  
+  if((*state == stopPlayback || *state == init)   && currentCommand == next) {
+    *state = nextSong;
+    return;
+  }
+  
+  if((*state == stopPlayback || *state == init)  && currentCommand == prev) {
+    *state = prevSong;
     return;
   }
 }
@@ -408,8 +497,10 @@ void notifyDisplayIfNeeded(mp3PlayerState* state, commands currentCommand)
 static void DrawLcdContents()
 {
     lcdCtrl.setRotation(180);
-    playButton.initButton(&lcdCtrl, 75, 200, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_WHITE, "play", 2);
-    stopButton.initButton(&lcdCtrl, 175, 200, 75, 75, ILI9341_WHITE, ILI9341_RED, ILI9341_WHITE, "stop", 2);
+    playButton.initButton(&lcdCtrl, 70, 150, 75, 75, ILI9341_WHITE, ILI9341_GREEN, ILI9341_WHITE, "play", 2);
+    stopButton.initButton(&lcdCtrl, 170, 150, 75, 75, ILI9341_WHITE, ILI9341_RED, ILI9341_WHITE, "stop", 2);
+    nextButton.initButton(&lcdCtrl, 170, 250, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_WHITE, "next", 2);
+    prevButton.initButton(&lcdCtrl, 70, 250, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_WHITE, "prev", 2);
     
 	char buf[BUFSIZE];
     lcdCtrl.fillScreen(ILI9341_BLACK);
@@ -418,10 +509,22 @@ static void DrawLcdContents()
     lcdCtrl.setCursor(40, 60);
     lcdCtrl.setTextColor(ILI9341_WHITE);  
     lcdCtrl.setTextSize(2);
-    PrintToLcdWithBuf(buf, BUFSIZE, "Sup Brahhj!");
+//    PrintToLcdWithBuf(buf, BUFSIZE, (char *)songNames[0]);
     playButton.drawButton();
     stopButton.drawButton();
+    nextButton.drawButton();
+    prevButton.drawButton();
 
+}
+
+void UpdateSongName()
+{
+    char buf[BUFSIZE];
+    lcdCtrl.fillRect(40, 60, 200, 20, ILI9341_BLACK);
+    lcdCtrl.setCursor(40, 60);
+    lcdCtrl.setTextColor(ILI9341_WHITE);  
+    lcdCtrl.setTextSize(2);
+    PrintToLcdWithBuf(buf, BUFSIZE, (char *)songNames[currentSongIndex]);
 }
 
 void DrawPlayDisplay()
@@ -446,12 +549,8 @@ void DrawPauseDisplay()
 
 void DrawStartDisplay()
 {
-    char buf[BUFSIZE];
+    lcdCtrl.fillRect(40, 60, 200, 20, ILI9341_BLACK);
     lcdCtrl.fillRect(40, 80, 125, 20, ILI9341_BLACK);
-//    lcdCtrl.setCursor(40, 80);
-//    lcdCtrl.setTextColor(ILI9341_WHITE);  
-//    lcdCtrl.setTextSize(2);
-//    PrintToLcdWithBuf(buf, BUFSIZE, "          ");
 }
 
 void DisplayTask(void* pdata)
@@ -487,6 +586,9 @@ void DisplayTask(void* pdata)
     INT8U err;
     displayState* pNewDisplay;
     
+    //int currentSongIndex = 0;
+    bool paused = false;
+    
     while(1) {
         pNewDisplay = (displayState*)OSMboxPend(displayMBox, 0, &err);
         PrintWithBuf(buf, BUFSIZE, "DisplayTask: unpended! - %d\n", err);
@@ -494,15 +596,35 @@ void DisplayTask(void* pdata)
         case startDisplay:
             PrintWithBuf(buf, BUFSIZE, "DisplayTask: update - start!\n");
             DrawStartDisplay();
+            paused = false;
             break;
         case playDisplay:
             PrintWithBuf(buf, BUFSIZE, "DisplayTask: update - play!\n");
+            if (!paused) UpdateSongName();
             DrawPlayDisplay();
+            paused = false;
             break;
         case pauseDisplay:
             PrintWithBuf(buf, BUFSIZE, "DisplayTask: update - pause!\n");
             DrawPauseDisplay();
+            paused = true;
             break;
+//        case nextSongTitle:
+//            if (currentSongIndex == NUM_SONGS-1) {
+//                currentSongIndex = 0;
+//            } else {
+//                ++currentSongIndex;
+//            }
+//            UpdateSongName();
+//            break;
+//        case prevSongTitle:
+//            if (currentSongIndex == 0) {
+//                currentSongIndex = NUM_SONGS-1;
+//            } else {
+//                --currentSongIndex;
+//            }
+//            UpdateSongName();
+//            break;
         }
         OSTimeDly(5);
     }
@@ -549,6 +671,8 @@ void TouchTask(void* pdata)
         if (! touched) {
             playButton.press(false);
             stopButton.press(false);
+            nextButton.press(false);
+            prevButton.press(false);
             OSTimeDly(5);
             continue;
         }
@@ -587,6 +711,30 @@ void TouchTask(void* pdata)
             }
             continue; // only draw inside of playbutton
         }
+        
+        if (nextButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !nextButton.isPressed()){
+            nextButton.press(true);
+            currentCommand = next;
+            err = OSQPost(commandMsgQ, (void*)&currentCommand);
+            if (err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "error!\n");
+            } else {
+                OSTimeDly(5);
+            }
+            continue; // only draw inside of playbutton
+        }
+        
+        if (prevButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !prevButton.isPressed()){
+            prevButton.press(true);
+            currentCommand = prev;
+            err = OSQPost(commandMsgQ, (void*)&currentCommand);
+            if (err != 0) {
+                PrintWithBuf(buf, BUFSIZE, "error!\n");
+            } else {
+                OSTimeDly(5);
+            }
+            continue; // only draw inside of playbutton
+        }
     }
 }
 /************************************************************************************
@@ -594,45 +742,45 @@ void TouchTask(void* pdata)
    Runs MP3 demo code
 
 ************************************************************************************/
-void Mp3DemoTask(void* pdata)
-{
-    PjdfErrCode pjdfErr;
-    INT32U length;
-
-    OSTimeDly(2000); // Allow other task to initialize LCD before we use it.
-    
-	char buf[BUFSIZE];
-	PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
-
-	PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
-    // Open handle to the MP3 decoder driver
-    HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
-    if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
-
-	PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
-    // We talk to the MP3 decoder over a SPI interface therefore
-    // open an instance of that SPI driver and pass the handle to 
-    // the MP3 driver.
-    HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
-    if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
-
-    length = sizeof(HANDLE);
-    pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
-    if(PJDF_IS_ERROR(pjdfErr)) while(1);
-
-    // Send initialization data to the MP3 decoder and run a test
-	PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
-    Mp3Init(hMp3);
-    int count = 0;
-    
-    while (1)
-    {
-        OSTimeDly(500);
-        PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
-        Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
-        PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-    }
-}
+//void Mp3DemoTask(void* pdata)
+//{
+//    PjdfErrCode pjdfErr;
+//    INT32U length;
+//
+//    OSTimeDly(2000); // Allow other task to initialize LCD before we use it.
+//    
+//	char buf[BUFSIZE];
+//	PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
+//
+//	PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
+//    // Open handle to the MP3 decoder driver
+//    HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
+//    if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
+//
+//	PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
+//    // We talk to the MP3 decoder over a SPI interface therefore
+//    // open an instance of that SPI driver and pass the handle to 
+//    // the MP3 driver.
+//    HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
+//    if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
+//
+//    length = sizeof(HANDLE);
+//    pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
+//    if(PJDF_IS_ERROR(pjdfErr)) while(1);
+//
+//    // Send initialization data to the MP3 decoder and run a test
+//	PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
+//    Mp3Init(hMp3);
+//    int count = 0;
+//    
+//    while (1)
+//    {
+//        OSTimeDly(500);
+//        PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
+//        Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
+//        PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
+//    }
+//}
 
 
 // Renders a character at the current cursor position on the LCD

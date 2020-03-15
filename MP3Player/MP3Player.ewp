@@ -2556,4 +2556,22 @@
             <name>$PROJ_DIR$\Util\printf.h</name>
         </file>
     </group>
+    <file>
+        <name>$PROJ_DIR$\MP3data\atrdYouYou.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\MP3data\atrdYouYou2.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\MP3data\atrdYouYou3.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\MP3data\ksanaBobby.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\MP3data\ksanaBobby2.h</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\MP3data\songs.h</name>
+    </file>
 </project>
