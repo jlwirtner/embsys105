@@ -2715,13 +2715,19 @@
     <group>
         <name>MP3data</name>
         <file>
+            <name>$PROJ_DIR$\MP3data\curb3.h</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\MP3data\dramatic.h</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\MP3data\GenerateMp3Header.ps1</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\MP3data\train_crossing.h</name>
+            <name>$PROJ_DIR$\MP3data\seinfeld3.h</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\MP3data\train_crossing.mp3</name>
+            <name>$PROJ_DIR$\MP3data\songs.h</name>
         </file>
     </group>
     <group>
@@ -2781,22 +2787,4 @@
             <name>$PROJ_DIR$\Util\printf.h</name>
         </file>
     </group>
-    <file>
-        <name>$PROJ_DIR$\MP3data\atrdYouYou.h</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\MP3data\atrdYouYou2.h</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\MP3data\atrdYouYou3.h</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\MP3data\ksanaBobby.h</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\MP3data\ksanaBobby2.h</name>
-    </file>
-    <file>
-        <name>$PROJ_DIR$\MP3data\songs.h</name>
-    </file>
 </project>

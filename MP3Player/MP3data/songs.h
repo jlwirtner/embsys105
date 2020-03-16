@@ -1,12 +1,15 @@
-#include "ksanaBobby2.h"
-#include "atrdYouYou3.h"
+//#include "ksanaBobby2.h"
+//#include "atrdYouYou3.h"
+#include "seinfeld3.h"
+#include "curb3.h"
+#include "dramatic.h"
 
-#define NUM_SONGS 2
+#define NUM_SONGS 3
 
-const char * songNames[] = {Ksana_Bobby_Title,Artd_YouYou_Title};
+const char * songNames[] = {Seinfeld_Title,Curb_Title,Dramatic_Title};
 
-const unsigned char* songData[] = {Ksana_Bobby_Data,Artd_YouYou_Data};
+const unsigned char* songData[] = {Seinfeld_Data,Curb_Data,Dramatic_Data};
 
-const int songSizes[] = {sizeof(Ksana_Bobby_Data), sizeof(Artd_YouYou_Data)};
+const int songSizes[] = {sizeof(Seinfeld_Data), sizeof(Curb_Data), sizeof(Dramatic_Data)};
 
 

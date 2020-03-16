@@ -56,7 +56,6 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 
 static OS_STK   TouchTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE];
-static OS_STK   Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   CommandTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   Mp3TaskStk[APP_CFG_TASK_START_STK_SIZE];
 
@@ -64,7 +63,7 @@ static OS_STK   Mp3TaskStk[APP_CFG_TASK_START_STK_SIZE];
 // Task prototypes
 void TouchTask(void* pdata);
 void DisplayTask(void* pdata);
-void Mp3DemoTask(void* pdata);
+//void Mp3DemoTask(void* pdata);
 void CommandTask(void* pdata);
 void Mp3Task(void* pdata);
 
@@ -109,17 +108,15 @@ typedef enum {
 typedef enum {
   startDisplay,
   playDisplay,
-  pauseDisplay,
-//  nextSongTitle,
-//  prevSongTitle
+  pauseDisplay
 } displayState;
 
 OS_EVENT * mp3MBox;
 OS_EVENT * displayMBox;
 
 void updateMp3PlayerState(mp3PlayerState* state, commands currentCommand);
-void notifyDisplayIfNeeded(mp3PlayerState* state, commands currentCommand);
 
+// Current Song Index - used for MP3 Task and Display Task
 INT8U currentSongIndex = 0;
 
 /************************************************************************************
@@ -168,7 +165,6 @@ void StartupTask(void* pdata)
     displayMBox = OSMboxCreate((void*)0);
 
     // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
-    //OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], APP_TASK_TEST1_PRIO);
     OSTaskCreate(TouchTask, (void*)0, &TouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 6);
     OSTaskCreate(DisplayTask, (void*)0, &DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 8);
     OSTaskCreate(CommandTask, (void*)0, &CommandTaskStk[APP_CFG_TASK_START_STK_SIZE-1], 3);
@@ -180,6 +176,11 @@ void StartupTask(void* pdata)
 	OSTaskDel(OS_PRIO_SELF);
 }
 
+/************************************************************************************
+
+   Command Task
+
+************************************************************************************/
 void CommandTask(void* pdata)
 {
     char buf[BUFSIZE];
@@ -239,6 +240,11 @@ void CommandTask(void* pdata)
     }
 }
 
+/************************************************************************************
+
+   MP3 Task
+
+************************************************************************************/
 void Mp3Task(void* pdata)
 {
     PjdfErrCode pjdfErr;
@@ -274,24 +280,18 @@ void Mp3Task(void* pdata)
     mp3PlayerState state = init;
     displayState newDisplayState = startDisplay;
 
-    //INT32U bufLen = sizeof(Train_Crossing);
-    INT32U bufLen;
-    
     // mp3 stream variables
-    //INT8U *bufPos = (INT8U*)Train_Crossing;
+    INT32U bufLen;
     INT8U *bufPos;
     INT32U iBufPos = 0;
     INT32U chunkLen;
     
     chunkLen = MP3_DECODER_BUF_SIZE;
     
+    // Bools used in state machine
     BOOLEAN notifyPause = false;
-    
-    // Set current song to track 0
-    //int currentSongIndex = 0;
-    bool playNextSong = false;
-    
-    
+    BOOLEAN playNextSong = false;
+  
     while(1) {
         pCurrentCommand = (commands*)OSMboxAccept(mp3MBox);
         if(pCurrentCommand) {
@@ -319,9 +319,6 @@ void Mp3Task(void* pdata)
             } else {
                 ++currentSongIndex;
             }
-//            newDisplayState = nextSongTitle;
-//            OSMboxPost(displayMBox, (void*)&newDisplayState);
-//            OSTimeDly(50);
             state = startPlayback;
             break;
         case prevSong:
@@ -330,9 +327,6 @@ void Mp3Task(void* pdata)
             } else {
                 --currentSongIndex;
             }
-//            newDisplayState = prevSongTitle;
-//            OSMboxPost(displayMBox, (void*)&newDisplayState);
-//            OSTimeDly(50);
             state = startPlayback;
             break;
         case startPlayback:
@@ -375,9 +369,6 @@ void Mp3Task(void* pdata)
                 } else {
                   ++currentSongIndex;
                 }
-//                newDisplayState = nextSongTitle;
-//                OSMboxPost(displayMBox, (void*)&newDisplayState);
-//                OSTimeDly(50);
                 if (currentSongIndex != 0) 
                     playNextSong = true;
                 else
@@ -409,6 +400,11 @@ void Mp3Task(void* pdata)
     }
 }
 
+/************************************************************************************
+
+   Updates MP3 Task state
+
+************************************************************************************/
 void updateMp3PlayerState(mp3PlayerState* state, commands currentCommand)
 {
   if(*state == init && currentCommand == play) {
@@ -442,58 +438,11 @@ void updateMp3PlayerState(mp3PlayerState* state, commands currentCommand)
   }
 }
 
-void notifyDisplayIfNeeded(mp3PlayerState* state, commands currentCommand)
-{
-  INT8U err;
-  displayState newDisplayState;
-  
-  char buf[BUFSIZE];
-  
-  if(*state == init && currentCommand == play) {
-    newDisplayState = playDisplay;
-    err = OSMboxPost(displayMBox,(void*)newDisplayState);
-    if(err != OS_ERR_NONE) {
-        PrintWithBuf(buf, BUFSIZE, "err posting to display mailbox! - %d\n", err);
-    } else {
-        PrintWithBuf(buf, BUFSIZE, "notified display\n");
-    }
-    return;
-  }
-  
-  if(*state == stopPlayback) {
-    newDisplayState = startDisplay;
-    err = OSMboxPost(displayMBox,(void*)newDisplayState);
-    if(err != OS_ERR_NONE) {
-        PrintWithBuf(buf, BUFSIZE, "err posting to display mailbox! - %d\n", err);
-    } else {
-        PrintWithBuf(buf, BUFSIZE, "notified display\n");
-    }
-    return;
-  }
-  
-  if(*state == playback && currentCommand == play) {
-    newDisplayState = pauseDisplay;
-    err = OSMboxPost(displayMBox,(void*)newDisplayState);
-    if(err != OS_ERR_NONE) {
-        PrintWithBuf(buf, BUFSIZE, "err posting to display mailbox! - %d\n", err);
-    } else {
-        PrintWithBuf(buf, BUFSIZE, "notified display\n");
-    }
-    return;
-  }
-  
-  if(*state == pause && currentCommand == play) {
-    newDisplayState = playDisplay;
-    err = OSMboxPost(displayMBox,(void*)newDisplayState);
-    if(err != OS_ERR_NONE) {
-        PrintWithBuf(buf, BUFSIZE, "err posting to display mailbox! - %d\n", err);
-    } else {
-        PrintWithBuf(buf, BUFSIZE, "notified display\n");
-    }
-    return;
-  }
-}
+/************************************************************************************
 
+   Draws initial user interface
+
+************************************************************************************/
 static void DrawLcdContents()
 {
     lcdCtrl.setRotation(180);
@@ -502,14 +451,12 @@ static void DrawLcdContents()
     nextButton.initButton(&lcdCtrl, 170, 250, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_WHITE, "next", 2);
     prevButton.initButton(&lcdCtrl, 70, 250, 75, 75, ILI9341_WHITE, ILI9341_BLUE, ILI9341_WHITE, "prev", 2);
     
-	char buf[BUFSIZE];
     lcdCtrl.fillScreen(ILI9341_BLACK);
     
     // Print a message on the LCD
     lcdCtrl.setCursor(40, 60);
     lcdCtrl.setTextColor(ILI9341_WHITE);  
     lcdCtrl.setTextSize(2);
-//    PrintToLcdWithBuf(buf, BUFSIZE, (char *)songNames[0]);
     playButton.drawButton();
     stopButton.drawButton();
     nextButton.drawButton();
@@ -517,6 +464,11 @@ static void DrawLcdContents()
 
 }
 
+/************************************************************************************
+
+   Update song title on display
+
+************************************************************************************/
 void UpdateSongName()
 {
     char buf[BUFSIZE];
@@ -527,6 +479,11 @@ void UpdateSongName()
     PrintToLcdWithBuf(buf, BUFSIZE, (char *)songNames[currentSongIndex]);
 }
 
+/************************************************************************************
+
+   Draw playing indicator on screen
+
+************************************************************************************/
 void DrawPlayDisplay()
 {
     char buf[BUFSIZE];
@@ -537,6 +494,11 @@ void DrawPlayDisplay()
     PrintToLcdWithBuf(buf, BUFSIZE, "playing...");
 }
 
+/************************************************************************************
+
+   Draw Paused indicator on screen
+
+************************************************************************************/
 void DrawPauseDisplay()
 {
     char buf[BUFSIZE];
@@ -547,12 +509,22 @@ void DrawPauseDisplay()
     PrintToLcdWithBuf(buf, BUFSIZE, "paused... ");
 }
 
+/************************************************************************************
+
+   Clear song title and play/pause indicator from screen
+
+************************************************************************************/
 void DrawStartDisplay()
 {
     lcdCtrl.fillRect(40, 60, 200, 20, ILI9341_BLACK);
     lcdCtrl.fillRect(40, 80, 125, 20, ILI9341_BLACK);
 }
 
+/************************************************************************************
+
+   Display Task
+
+************************************************************************************/
 void DisplayTask(void* pdata)
 {
     PjdfErrCode pjdfErr;
@@ -609,39 +581,40 @@ void DisplayTask(void* pdata)
             DrawPauseDisplay();
             paused = true;
             break;
-//        case nextSongTitle:
-//            if (currentSongIndex == NUM_SONGS-1) {
-//                currentSongIndex = 0;
-//            } else {
-//                ++currentSongIndex;
-//            }
-//            UpdateSongName();
-//            break;
-//        case prevSongTitle:
-//            if (currentSongIndex == 0) {
-//                currentSongIndex = NUM_SONGS-1;
-//            } else {
-//                --currentSongIndex;
-//            }
-//            UpdateSongName();
-//            break;
         }
         OSTimeDly(5);
     }
     
 }
 
+// Renders a character at the current cursor position on the LCD
+static void PrintCharToLcd(char c)
+{
+    lcdCtrl.write(c);
+}
+
+/************************************************************************************
+
+   Print a formated string with the given buffer to LCD.
+   Each task should use its own buffer to prevent data corruption.
+
+************************************************************************************/
+void PrintToLcdWithBuf(char *buf, int size, char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    PrintToDeviceWithBuf(PrintCharToLcd, buf, size, format, args);
+    va_end(args);
+}
 
 
 /************************************************************************************
 
-   Runs Touch Task
+   Touch Task
 
 ************************************************************************************/
 void TouchTask(void* pdata)
 {
-    PjdfErrCode pjdfErr;
-    INT32U length;
 
 	char buf[BUFSIZE];
 	PrintWithBuf(buf, BUFSIZE, "LcdTouchDemoTask: starting\n");
@@ -655,8 +628,6 @@ void TouchTask(void* pdata)
         PrintWithBuf(buf, BUFSIZE, "Couldn't start FT6206 touchscreen controller\n");
         while (1);
     }
-    
-    int currentcolor = ILI9341_RED;
     
     commands currentCommand;
     INT8U err;
@@ -697,7 +668,7 @@ void TouchTask(void* pdata)
             } else {
                 OSTimeDly(5);
             }
-            continue; // only draw inside of playbutton
+            continue;
         }
         
         if (stopButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !stopButton.isPressed()){
@@ -709,7 +680,7 @@ void TouchTask(void* pdata)
             } else {
                 OSTimeDly(5);
             }
-            continue; // only draw inside of playbutton
+            continue; 
         }
         
         if (nextButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !nextButton.isPressed()){
@@ -721,7 +692,7 @@ void TouchTask(void* pdata)
             } else {
                 OSTimeDly(5);
             }
-            continue; // only draw inside of playbutton
+            continue;
         }
         
         if (prevButton.contains(ILI9341_TFTWIDTH - rawPoint.x, ILI9341_TFTHEIGHT - rawPoint.y) && !prevButton.isPressed()){
@@ -733,75 +704,12 @@ void TouchTask(void* pdata)
             } else {
                 OSTimeDly(5);
             }
-            continue; // only draw inside of playbutton
+            continue;
         }
     }
 }
-/************************************************************************************
-
-   Runs MP3 demo code
-
-************************************************************************************/
-//void Mp3DemoTask(void* pdata)
-//{
-//    PjdfErrCode pjdfErr;
-//    INT32U length;
-//
-//    OSTimeDly(2000); // Allow other task to initialize LCD before we use it.
-//    
-//	char buf[BUFSIZE];
-//	PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
-//
-//	PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
-//    // Open handle to the MP3 decoder driver
-//    HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
-//    if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
-//
-//	PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
-//    // We talk to the MP3 decoder over a SPI interface therefore
-//    // open an instance of that SPI driver and pass the handle to 
-//    // the MP3 driver.
-//    HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
-//    if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
-//
-//    length = sizeof(HANDLE);
-//    pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
-//    if(PJDF_IS_ERROR(pjdfErr)) while(1);
-//
-//    // Send initialization data to the MP3 decoder and run a test
-//	PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
-//    Mp3Init(hMp3);
-//    int count = 0;
-//    
-//    while (1)
-//    {
-//        OSTimeDly(500);
-//        PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
-//        Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
-//        PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-//    }
-//}
 
 
-// Renders a character at the current cursor position on the LCD
-static void PrintCharToLcd(char c)
-{
-    lcdCtrl.write(c);
-}
-
-/************************************************************************************
-
-   Print a formated string with the given buffer to LCD.
-   Each task should use its own buffer to prevent data corruption.
-
-************************************************************************************/
-void PrintToLcdWithBuf(char *buf, int size, char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    PrintToDeviceWithBuf(PrintCharToLcd, buf, size, format, args);
-    va_end(args);
-}
 
 
 
